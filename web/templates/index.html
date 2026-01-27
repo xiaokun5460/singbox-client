@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SingBox Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155',
+                            text: '#e2e8f0',
+                            muted: '#94a3b8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .spinner {
+            border: 2px solid #334155;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-dark-text min-h-screen" x-data="app()" x-init="init()">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-dark-card border-r border-dark-border flex flex-col">
+            <div class="p-4 border-b border-dark-border">
+                <h1 class="text-xl font-bold text-blue-400">SingBox Manager</h1>
+                <p class="text-xs text-dark-muted mt-1">代理管理工具</p>
+            </div>
+
+            <nav class="flex-1 p-4 space-y-2">
+                <button @click="currentPage = 'dashboard'"
+                    :class="currentPage === 'dashboard' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                    </svg>
+                    仪表盘
+                </button>
+
+                <button @click="currentPage = 'nodes'"
+                    :class="currentPage === 'nodes' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                    </svg>
+                    节点管理
+                </button>
+
+                <button @click="currentPage = 'subscriptions'"
+                    :class="currentPage === 'subscriptions' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    订阅管理
+                </button>
+
+                <button @click="currentPage = 'rules'"
+                    :class="currentPage === 'rules' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    规则设置
+                </button>
+
+                <button @click="currentPage = 'settings'"
+                    :class="currentPage === 'settings' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    系统设置
+                </button>
+
+                <button @click="currentPage = 'logs'"
+                    :class="currentPage === 'logs' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    日志查看
+                </button>
+            </nav>
+
+            <!-- Status indicator -->
+            <div class="p-4 border-t border-dark-border">
+                <div class="flex items-center gap-2">
+                    <div :class="status.state === 'running' ? 'bg-green-500' : 'bg-gray-500'"
+                         class="w-3 h-3 rounded-full"></div>
+                    <span class="text-sm" x-text="status.state === 'running' ? '运行中' : '已停止'"></span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="flex-1 overflow-auto">
+            <!-- Dashboard -->
+            <div x-show="currentPage === 'dashboard'" x-cloak class="p-6">
+                <h2 class="text-2xl font-bold mb-6">仪表盘</h2>
+
+                <!-- Status cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-dark-card rounded-lg p-4 border border-dark-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-dark-muted text-sm">服务状态</p>
+                                <p class="text-xl font-bold" :class="status.state === 'running' ? 'text-green-400' : 'text-gray-400'"
+                                   x-text="status.state === 'running' ? '运行中' : '已停止'"></p>
+                            </div>
+                            <div :class="status.state === 'running' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'"
+                                 class="p-3 rounded-lg">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-card rounded-lg p-4 border border-dark-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-dark-muted text-sm">节点数量</p>
+                                <p class="text-xl font-bold" x-text="nodes.length"></p>
+                            </div>
+                            <div class="bg-blue-500/20 text-blue-400 p-3 rounded-lg">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-card rounded-lg p-4 border border-dark-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-dark-muted text-sm">当前节点</p>
+                                <p class="text-xl font-bold truncate" x-text="status.selected_node || '未选择'"></p>
+                            </div>
+                            <div class="bg-purple-500/20 text-purple-400 p-3 rounded-lg">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-card rounded-lg p-4 border border-dark-border">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-dark-muted text-sm">代理模式</p>
+                                <p class="text-xl font-bold" x-text="getModeText(status.proxy_mode)"></p>
+                            </div>
+                            <div class="bg-yellow-500/20 text-yellow-400 p-3 rounded-lg">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick actions -->
+                <div class="bg-dark-card rounded-lg p-6 border border-dark-border mb-6">
+                    <h3 class="text-lg font-semibold mb-4">快捷操作</h3>
+                    <div class="flex flex-wrap gap-4">
+                        <button @click="startService()"
+                                :disabled="status.state === 'running' || loading"
+                                class="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            启动服务
+                        </button>
+
+                        <button @click="stopService()"
+                                :disabled="status.state !== 'running' || loading"
+                                class="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                            </svg>
+                            停止服务
+                        </button>
+
+                        <button @click="restartService()"
+                                :disabled="loading"
+                                class="px-6 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            重启服务
+                        </button>
+
+                        <button @click="refreshSubscriptions()"
+                                :disabled="loading"
+                                class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2">
+                            <svg class="w-5 h-5" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            刷新订阅
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Proxy mode -->
+                <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                    <h3 class="text-lg font-semibold mb-4">代理模式</h3>
+                    <div class="flex gap-4">
+                        <button @click="setProxyMode('rule')"
+                                :class="status.proxy_mode === 'rule' ? 'bg-blue-600 border-blue-600' : 'border-dark-border hover:border-blue-500'"
+                                class="flex-1 p-4 rounded-lg border-2 transition-colors">
+                            <p class="font-semibold">规则模式</p>
+                            <p class="text-sm text-dark-muted">根据规则自动分流</p>
+                        </button>
+
+                        <button @click="setProxyMode('global')"
+                                :class="status.proxy_mode === 'global' ? 'bg-blue-600 border-blue-600' : 'border-dark-border hover:border-blue-500'"
+                                class="flex-1 p-4 rounded-lg border-2 transition-colors">
+                            <p class="font-semibold">全局模式</p>
+                            <p class="text-sm text-dark-muted">所有流量走代理</p>
+                        </button>
+
+                        <button @click="setProxyMode('direct')"
+                                :class="status.proxy_mode === 'direct' ? 'bg-blue-600 border-blue-600' : 'border-dark-border hover:border-blue-500'"
+                                class="flex-1 p-4 rounded-lg border-2 transition-colors">
+                            <p class="font-semibold">直连模式</p>
+                            <p class="text-sm text-dark-muted">所有流量直连</p>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nodes page -->
+            <div x-show="currentPage === 'nodes'" x-cloak class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">节点管理</h2>
+                    <button @click="refreshSubscriptions()"
+                            :disabled="loading"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        刷新节点
+                    </button>
+                </div>
+
+                <div class="bg-dark-card rounded-lg border border-dark-border overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-dark-border">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">节点名称</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">类型</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">服务器</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">延迟</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-dark-border">
+                                <template x-for="node in nodes" :key="node.name">
+                                    <tr :class="node.selected ? 'bg-blue-600/10' : 'hover:bg-dark-border/50'" class="transition-colors">
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center gap-2">
+                                                <span x-show="node.selected" class="text-blue-400">
+                                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                                    </svg>
+                                                </span>
+                                                <span x-text="node.name" class="truncate max-w-xs"></span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span x-text="node.type" class="px-2 py-1 bg-dark-border rounded text-sm"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-dark-muted">
+                                            <span x-text="node.server + ':' + node.port" class="truncate max-w-xs block"></span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span x-show="node.latency > 0" x-text="node.latency + 'ms'"
+                                                  :class="node.latency < 200 ? 'text-green-400' : node.latency < 500 ? 'text-yellow-400' : 'text-red-400'"></span>
+                                            <span x-show="node.latency === -1" class="text-red-400">超时</span>
+                                            <span x-show="!node.latency && node.latency !== -1" class="text-dark-muted">-</span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex gap-2">
+                                                <button @click="selectNode(node.name)"
+                                                        :disabled="node.selected"
+                                                        class="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded text-sm transition-colors">
+                                                    选择
+                                                </button>
+                                                <button @click="testNode(node)"
+                                                        :disabled="node.testing"
+                                                        class="px-3 py-1 bg-dark-border hover:bg-dark-muted/30 rounded text-sm transition-colors flex items-center gap-1">
+                                                    <span x-show="node.testing" class="spinner"></span>
+                                                    <span x-show="!node.testing">测速</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="nodes.length === 0">
+                                    <td colspan="5" class="px-4 py-8 text-center text-dark-muted">
+                                        暂无节点，请先添加订阅
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subscriptions page -->
+            <div x-show="currentPage === 'subscriptions'" x-cloak class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">订阅管理</h2>
+                    <button @click="showAddSubscription = true"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        添加订阅
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <template x-for="sub in subscriptions" :key="sub.id">
+                        <div class="bg-dark-card rounded-lg p-4 border border-dark-border">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <h3 class="font-semibold" x-text="sub.name"></h3>
+                                    <p class="text-sm text-dark-muted truncate" x-text="sub.url"></p>
+                                    <p class="text-xs text-dark-muted mt-1" x-show="sub.updated_at">
+                                        上次更新: <span x-text="formatDate(sub.updated_at)"></span>
+                                    </p>
+                                </div>
+                                <div class="flex gap-2 ml-4">
+                                    <button @click="refreshSubscription(sub)"
+                                            class="p-2 hover:bg-dark-border rounded transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                    </button>
+                                    <button @click="deleteSubscription(sub.id)"
+                                            class="p-2 hover:bg-red-600/20 text-red-400 rounded transition-colors">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div x-show="subscriptions.length === 0" class="bg-dark-card rounded-lg p-8 border border-dark-border text-center">
+                        <p class="text-dark-muted">暂无订阅</p>
+                        <button @click="showAddSubscription = true"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                            添加第一个订阅
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add subscription modal -->
+                <div x-show="showAddSubscription" x-cloak
+                     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+                     @click.self="showAddSubscription = false">
+                    <div class="bg-dark-card rounded-lg p-6 w-full max-w-md border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">添加订阅</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">订阅名称</label>
+                                <input type="text" x-model="newSubscription.name"
+                                       placeholder="可选，自动生成"
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">订阅地址</label>
+                                <input type="url" x-model="newSubscription.url"
+                                       placeholder="https://..."
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button @click="showAddSubscription = false"
+                                    class="px-4 py-2 bg-dark-border hover:bg-dark-muted/30 rounded-lg transition-colors">
+                                取消
+                            </button>
+                            <button @click="addSubscription()"
+                                    :disabled="!newSubscription.url"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors">
+                                添加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rules page -->
+            <div x-show="currentPage === 'rules'" x-cloak class="p-6">
+                <h2 class="text-2xl font-bold mb-6">规则设置</h2>
+
+                <!-- Default rules -->
+                <div class="bg-dark-card rounded-lg p-6 border border-dark-border mb-6">
+                    <h3 class="text-lg font-semibold mb-4">内置规则</h3>
+                    <div class="space-y-3">
+                        <template x-for="rule in rulesInfo.default_rules" :key="rule.name">
+                            <div class="flex items-center justify-between py-2 border-b border-dark-border last:border-0">
+                                <div>
+                                    <p class="font-medium" x-text="rule.name"></p>
+                                    <p class="text-sm text-dark-muted" x-text="rule.description"></p>
+                                </div>
+                                <span class="px-2 py-1 bg-green-600/20 text-green-400 rounded text-sm">启用</span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Custom rules -->
+                <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold">自定义规则</h3>
+                        <button @click="showAddRule = true"
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition-colors">
+                            添加规则
+                        </button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <template x-for="(rule, index) in rulesInfo.custom_rules" :key="index">
+                            <div class="flex items-center justify-between py-2 px-3 bg-dark-bg rounded-lg">
+                                <div class="flex items-center gap-3">
+                                    <span class="px-2 py-1 bg-dark-border rounded text-xs" x-text="rule.type"></span>
+                                    <span x-text="rule.value"></span>
+                                    <span class="text-dark-muted">→</span>
+                                    <span :class="rule.outbound === 'proxy' ? 'text-blue-400' : rule.outbound === 'direct' ? 'text-green-400' : 'text-red-400'"
+                                          x-text="rule.outbound"></span>
+                                </div>
+                                <button @click="removeCustomRule(index)"
+                                        class="p-1 hover:bg-red-600/20 text-red-400 rounded transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                        <p x-show="!rulesInfo.custom_rules || rulesInfo.custom_rules.length === 0"
+                           class="text-dark-muted text-center py-4">暂无自定义规则</p>
+                    </div>
+                </div>
+
+                <!-- Add rule modal -->
+                <div x-show="showAddRule" x-cloak
+                     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+                     @click.self="showAddRule = false">
+                    <div class="bg-dark-card rounded-lg p-6 w-full max-w-md border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">添加自定义规则</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">规则类型</label>
+                                <select x-model="newRule.type"
+                                        class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                                    <option value="domain">域名 (完整匹配)</option>
+                                    <option value="domain_suffix">域名后缀</option>
+                                    <option value="ip_cidr">IP CIDR</option>
+                                    <option value="geosite">Geosite</option>
+                                    <option value="geoip">GeoIP</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">值</label>
+                                <input type="text" x-model="newRule.value"
+                                       placeholder="example.com"
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">出口</label>
+                                <select x-model="newRule.outbound"
+                                        class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                                    <option value="proxy">代理</option>
+                                    <option value="direct">直连</option>
+                                    <option value="block">阻止</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button @click="showAddRule = false"
+                                    class="px-4 py-2 bg-dark-border hover:bg-dark-muted/30 rounded-lg transition-colors">
+                                取消
+                            </button>
+                            <button @click="addCustomRule()"
+                                    :disabled="!newRule.value"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors">
+                                添加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings page -->
+            <div x-show="currentPage === 'settings'" x-cloak class="p-6">
+                <h2 class="text-2xl font-bold mb-6">系统设置</h2>
+
+                <template x-if="appConfig && appConfig.proxy && appConfig.dns && appConfig.subscription">
+                <div class="space-y-6">
+                    <!-- DNS Settings -->
+                    <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">DNS 设置</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-2">国内 DNS</label>
+                                <div class="space-y-2">
+                                    <template x-for="(dns, i) in appConfig.dns.domestic_servers || []" :key="i">
+                                        <div class="flex gap-2">
+                                            <input type="text" :value="dns"
+                                                   @input="appConfig.dns.domestic_servers[i] = $event.target.value"
+                                                   class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg">
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-2">代理 DNS</label>
+                                <div class="space-y-2">
+                                    <template x-for="(dns, i) in appConfig.dns.proxy_servers || []" :key="i">
+                                        <div class="flex gap-2">
+                                            <input type="text" :value="dns"
+                                                   @input="appConfig.dns.proxy_servers[i] = $event.target.value"
+                                                   class="flex-1 px-3 py-2 bg-dark-bg border border-dark-border rounded-lg">
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TUN Settings -->
+                    <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">TUN 设置</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-2">TUN 地址</label>
+                                <input type="text" x-model="appConfig.proxy.tun_address"
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-2">TUN 栈</label>
+                                <select x-model="appConfig.proxy.tun_stack"
+                                        class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg">
+                                    <option value="system">System</option>
+                                    <option value="gvisor">gVisor</option>
+                                    <option value="mixed">Mixed</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" x-model="appConfig.proxy.auto_route" id="auto_route"
+                                       class="w-4 h-4 rounded border-dark-border bg-dark-bg">
+                                <label for="auto_route" class="text-sm">自动路由</label>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" x-model="appConfig.proxy.strict_route" id="strict_route"
+                                       class="w-4 h-4 rounded border-dark-border bg-dark-bg">
+                                <label for="strict_route" class="text-sm">严格路由</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subscription Settings -->
+                    <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">订阅设置</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" x-model="appConfig.subscription.auto_update" id="auto_update"
+                                       class="w-4 h-4 rounded border-dark-border bg-dark-bg">
+                                <label for="auto_update" class="text-sm">自动更新订阅</label>
+                            </div>
+                            <div x-show="appConfig.subscription.auto_update">
+                                <label class="block text-sm text-dark-muted mb-2">更新间隔 (分钟)</label>
+                                <input type="number" x-model.number="appConfig.subscription.update_interval"
+                                       min="5" max="1440"
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button @click="saveConfig()"
+                                class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                            保存设置
+                        </button>
+                    </div>
+                </div>
+                </template>
+                <div x-show="!appConfig || !appConfig.proxy" class="text-dark-muted text-center py-8">
+                    加载配置中...
+                </div>
+            </div>
+
+            <!-- Logs page -->
+            <div x-show="currentPage === 'logs'" x-cloak class="p-6 h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">日志查看</h2>
+                    <div class="flex items-center gap-3">
+                        <select x-model="logLevel" @change="setLogLevel()"
+                                class="px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-sm">
+                            <option value="trace">Trace</option>
+                            <option value="debug">Debug</option>
+                            <option value="info">Info</option>
+                            <option value="warn">Warn</option>
+                            <option value="error">Error</option>
+                        </select>
+                        <button @click="clearLogs()"
+                                class="px-4 py-2 bg-dark-border hover:bg-dark-muted/30 rounded-lg transition-colors text-sm">
+                            清空日志
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 bg-dark-card rounded-lg border border-dark-border overflow-hidden">
+                    <div id="log-container" class="h-full overflow-y-auto p-4 font-mono text-sm scrollbar-thin">
+                        <template x-for="(log, index) in logs" :key="index">
+                            <div class="py-1">
+                                <span class="text-dark-muted" x-text="formatLogTime(log.time)"></span>
+                                <span :class="{
+                                    'text-red-400': log.level === 'error' || log.level === 'fatal',
+                                    'text-yellow-400': log.level === 'warn',
+                                    'text-blue-400': log.level === 'debug',
+                                    'text-gray-500': log.level === 'trace',
+                                    'text-dark-text': log.level === 'info'
+                                }" x-text="'[' + log.level.toUpperCase() + ']'"></span>
+                                <span x-text="log.message"></span>
+                            </div>
+                        </template>
+                        <p x-show="logs.length === 0" class="text-dark-muted text-center py-4">暂无日志</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="fixed bottom-4 right-4 z-50 space-y-2">
+        <template x-for="(toast, index) in toasts" :key="index">
+            <div :class="toast.type === 'error' ? 'bg-red-600' : toast.type === 'success' ? 'bg-green-600' : 'bg-blue-600'"
+                 class="px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in">
+                <span x-text="toast.message"></span>
+                <button @click="toasts.splice(index, 1)" class="opacity-70 hover:opacity-100">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function app() {
+            return {
+                currentPage: 'dashboard',
+                loading: false,
+                status: {
+                    state: 'stopped',
+                    node_count: 0,
+                    selected_node: '',
+                    proxy_mode: 'rule'
+                },
+                nodes: [],
+                subscriptions: [],
+                rulesInfo: {
+                    default_rules: [],
+                    custom_rules: [],
+                    geosite_values: [],
+                    geoip_values: []
+                },
+                appConfig: null,
+                logs: [],
+                logLevel: 'info',
+                toasts: [],
+                showAddSubscription: false,
+                showAddRule: false,
+                newSubscription: { name: '', url: '' },
+                newRule: { type: 'domain', value: '', outbound: 'proxy' },
+                eventSource: null,
+
+                async init() {
+                    await this.fetchStatus();
+                    await this.fetchNodes();
+                    await this.fetchSubscriptions();
+                    await this.fetchRules();
+                    await this.fetchConfig();
+                    await this.fetchLogLevel();
+
+                    // Start polling
+                    setInterval(() => this.fetchStatus(), 5000);
+
+                    // Watch for page changes to manage SSE connection
+                    this.$watch('currentPage', (newPage, oldPage) => {
+                        if (newPage === 'logs') {
+                            this.fetchLogs();
+                            this.connectSSE();
+                        } else if (oldPage === 'logs') {
+                            this.disconnectSSE();
+                        }
+                    });
+                },
+
+                async fetchStatus() {
+                    try {
+                        const res = await fetch('/api/status');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.status = data.data;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch status:', e);
+                    }
+                },
+
+                async fetchNodes() {
+                    try {
+                        const res = await fetch('/api/nodes');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.nodes = data.data || [];
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch nodes:', e);
+                    }
+                },
+
+                async fetchSubscriptions() {
+                    try {
+                        const res = await fetch('/api/subscriptions');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.subscriptions = data.data || [];
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch subscriptions:', e);
+                    }
+                },
+
+                async fetchRules() {
+                    try {
+                        const res = await fetch('/api/rules');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.rulesInfo = data.data;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch rules:', e);
+                    }
+                },
+
+                async fetchConfig() {
+                    try {
+                        const res = await fetch('/api/config');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.appConfig = data.data;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch config:', e);
+                    }
+                },
+
+                async fetchLogs() {
+                    try {
+                        const res = await fetch('/api/logs');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.logs = data.data || [];
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch logs:', e);
+                    }
+                },
+
+                connectSSE() {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                    }
+
+                    this.eventSource = new EventSource('/api/logs/stream');
+                    let scrollTimeout = null;
+
+                    this.eventSource.onmessage = (event) => {
+                        const log = JSON.parse(event.data);
+                        this.logs.push(log);
+                        // Limit logs to prevent memory issues
+                        if (this.logs.length > 200) {
+                            this.logs = this.logs.slice(-200);
+                        }
+                        // Debounced auto-scroll (only on logs page)
+                        if (this.currentPage === 'logs') {
+                            clearTimeout(scrollTimeout);
+                            scrollTimeout = setTimeout(() => {
+                                const container = document.getElementById('log-container');
+                                if (container) {
+                                    container.scrollTop = container.scrollHeight;
+                                }
+                            }, 100);
+                        }
+                    };
+
+                    this.eventSource.onerror = () => {
+                        this.eventSource.close();
+                        // Only reconnect if still on logs page
+                        if (this.currentPage === 'logs') {
+                            setTimeout(() => this.connectSSE(), 5000);
+                        }
+                    };
+                },
+
+                disconnectSSE() {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
+                    }
+                },
+
+                async startService() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/start', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('服务已启动', 'success');
+                            await this.fetchStatus();
+                        } else {
+                            this.showToast(data.error || '启动失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('启动失败: ' + e.message, 'error');
+                    }
+                    this.loading = false;
+                },
+
+                async stopService() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/stop', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('服务已停止', 'success');
+                            await this.fetchStatus();
+                        } else {
+                            this.showToast(data.error || '停止失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('停止失败: ' + e.message, 'error');
+                    }
+                    this.loading = false;
+                },
+
+                async restartService() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/restart', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('服务已重启', 'success');
+                            await this.fetchStatus();
+                        } else {
+                            this.showToast(data.error || '重启失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('重启失败: ' + e.message, 'error');
+                    }
+                    this.loading = false;
+                },
+
+                async refreshSubscriptions() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/subscriptions/refresh', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('订阅已刷新', 'success');
+                            await this.fetchSubscriptions();
+                            await this.fetchNodes();
+                        } else {
+                            this.showToast(data.error || '刷新失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('刷新失败: ' + e.message, 'error');
+                    }
+                    this.loading = false;
+                },
+
+                async addSubscription() {
+                    try {
+                        const res = await fetch('/api/subscriptions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.newSubscription)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('订阅已添加', 'success');
+                            this.showAddSubscription = false;
+                            this.newSubscription = { name: '', url: '' };
+                            await this.fetchSubscriptions();
+                            setTimeout(() => this.fetchNodes(), 2000);
+                        } else {
+                            this.showToast(data.error || '添加失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('添加失败: ' + e.message, 'error');
+                    }
+                },
+
+                async deleteSubscription(id) {
+                    if (!confirm('确定删除此订阅?')) return;
+                    try {
+                        const res = await fetch(`/api/subscriptions/${id}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('订阅已删除', 'success');
+                            await this.fetchSubscriptions();
+                            await this.fetchNodes();
+                        } else {
+                            this.showToast(data.error || '删除失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('删除失败: ' + e.message, 'error');
+                    }
+                },
+
+                async selectNode(name) {
+                    try {
+                        const res = await fetch(`/api/nodes/${encodeURIComponent(name)}/select`, { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('节点已切换', 'success');
+                            await this.fetchNodes();
+                            await this.fetchStatus();
+                        } else {
+                            this.showToast(data.error || '切换失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('切换失败: ' + e.message, 'error');
+                    }
+                },
+
+                async testNode(node) {
+                    node.testing = true;
+                    try {
+                        const res = await fetch(`/api/nodes/${encodeURIComponent(node.name)}/test`, { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            node.latency = data.data.latency;
+                        }
+                    } catch (e) {
+                        node.latency = -1;
+                    }
+                    node.testing = false;
+                },
+
+                async setProxyMode(mode) {
+                    try {
+                        const res = await fetch('/api/rules/mode', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ mode })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('模式已切换', 'success');
+                            await this.fetchStatus();
+                        } else {
+                            this.showToast(data.error || '切换失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('切换失败: ' + e.message, 'error');
+                    }
+                },
+
+                async addCustomRule() {
+                    const rules = [...(this.rulesInfo.custom_rules || []), { ...this.newRule }];
+                    try {
+                        const res = await fetch('/api/rules', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(rules)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('规则已添加', 'success');
+                            this.showAddRule = false;
+                            this.newRule = { type: 'domain', value: '', outbound: 'proxy' };
+                            await this.fetchRules();
+                        } else {
+                            this.showToast(data.error || '添加失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('添加失败: ' + e.message, 'error');
+                    }
+                },
+
+                async removeCustomRule(index) {
+                    const rules = [...this.rulesInfo.custom_rules];
+                    rules.splice(index, 1);
+                    try {
+                        const res = await fetch('/api/rules', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(rules)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('规则已删除', 'success');
+                            await this.fetchRules();
+                        } else {
+                            this.showToast(data.error || '删除失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('删除失败: ' + e.message, 'error');
+                    }
+                },
+
+                async saveConfig() {
+                    try {
+                        const res = await fetch('/api/config', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.appConfig)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('设置已保存', 'success');
+                        } else {
+                            this.showToast(data.error || '保存失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('保存失败: ' + e.message, 'error');
+                    }
+                },
+
+                async clearLogs() {
+                    try {
+                        await fetch('/api/logs/clear', { method: 'POST' });
+                        this.logs = [];
+                        this.showToast('日志已清空', 'success');
+                    } catch (e) {
+                        this.showToast('清空失败: ' + e.message, 'error');
+                    }
+                },
+
+                async fetchLogLevel() {
+                    try {
+                        const res = await fetch('/api/logs/level');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.logLevel = data.data.level || 'info';
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch log level:', e);
+                    }
+                },
+
+                async setLogLevel() {
+                    try {
+                        const res = await fetch('/api/logs/level', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ level: this.logLevel })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('日志级别已设置为 ' + this.logLevel + '，重启后生效', 'success');
+                        } else {
+                            this.showToast(data.error || '设置失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('设置失败: ' + e.message, 'error');
+                    }
+                },
+
+                showToast(message, type = 'info') {
+                    this.toasts.push({ message, type });
+                    setTimeout(() => {
+                        this.toasts.shift();
+                    }, 3000);
+                },
+
+                getModeText(mode) {
+                    const modes = { rule: '规则', global: '全局', direct: '直连' };
+                    return modes[mode] || mode;
+                },
+
+                formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const date = new Date(dateStr);
+                    return date.toLocaleString('zh-CN');
+                },
+
+                formatLogTime(timeStr) {
+                    if (!timeStr) return '';
+                    const date = new Date(timeStr);
+                    return date.toLocaleTimeString('zh-CN');
+                }
+            };
+        }
+    </script>
+</body>
+</html>
