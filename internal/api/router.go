@@ -53,6 +53,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/logs/clear", r.corsMiddleware(r.handlers.ClearLogs))
 	r.mux.HandleFunc("/api/logs/level", r.corsMiddleware(r.handlers.HandleLogLevel))
 
+	r.mux.HandleFunc("/api/cache/clear", r.corsMiddleware(r.handlers.ClearCache))
+
 	// Static files and SPA
 	r.mux.HandleFunc("/", r.serveStatic)
 }

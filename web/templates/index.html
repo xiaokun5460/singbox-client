@@ -106,6 +106,15 @@
                     系统设置
                 </button>
 
+                <button @click="currentPage = 'connections'"
+                    :class="currentPage === 'connections' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                    </svg>
+                    连接
+                </button>
+
                 <button @click="currentPage = 'logs'"
                     :class="currentPage === 'logs' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
                     class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
@@ -618,6 +627,27 @@
                         </div>
                     </div>
 
+                    <!-- Cache Management -->
+                    <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">缓存管理</h3>
+                        <div class="space-y-4">
+                            <p class="text-sm text-dark-muted">
+                                DNS 缓存可以加速域名解析。如果遇到 DNS 解析问题，可以尝试清空缓存。
+                            </p>
+                            <div class="flex items-center gap-4">
+                                <button @click="clearCache()"
+                                        :disabled="clearingCache"
+                                        class="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2">
+                                    <svg x-show="clearingCache" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                    <span x-text="clearingCache ? '清空中...' : '清空 DNS 缓存'"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex justify-end">
                         <button @click="saveConfig()"
                                 class="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
@@ -631,11 +661,102 @@
                 </div>
             </div>
 
+            <!-- Connections page -->
+            <div x-show="currentPage === 'connections'" x-cloak class="p-6 h-full flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">连接管理</h2>
+                    <div class="flex items-center gap-3">
+                        <div class="text-sm text-dark-muted">
+                            <span class="text-green-400" x-text="'↓ ' + formatBytes(connStats.download)"></span>
+                            <span class="mx-2">|</span>
+                            <span class="text-blue-400" x-text="'↑ ' + formatBytes(connStats.upload)"></span>
+                            <span class="mx-2">|</span>
+                            <span x-text="connections.length + ' 连接'"></span>
+                        </div>
+                        <button @click="fetchConnections()"
+                                class="px-3 py-1 bg-dark-border hover:bg-dark-muted/30 rounded-lg transition-colors text-sm">
+                            刷新
+                        </button>
+                        <button @click="closeAllConnections()"
+                                class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm">
+                            断开全部
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 bg-dark-card rounded-lg border border-dark-border overflow-hidden">
+                    <div class="overflow-x-auto h-full">
+                        <table class="w-full">
+                            <thead class="bg-dark-border sticky top-0">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">主机</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">网络</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">类型</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">出口链</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">下载</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">上传</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">时长</th>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-dark-border overflow-y-auto">
+                                <template x-for="conn in connections" :key="conn.id">
+                                    <tr class="hover:bg-dark-border/50 transition-colors">
+                                        <td class="px-4 py-2">
+                                            <div class="max-w-xs truncate" x-text="conn.metadata.host || conn.metadata.destinationIP || '-'"></div>
+                                            <div class="text-xs text-dark-muted" x-text="conn.metadata.destinationIP && conn.metadata.host ? conn.metadata.destinationIP : ''"></div>
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-1 bg-dark-border rounded text-xs" x-text="conn.metadata.network?.toUpperCase()"></span>
+                                        </td>
+                                        <td class="px-4 py-2 text-sm text-dark-muted" x-text="conn.metadata.type || '-'"></td>
+                                        <td class="px-4 py-2">
+                                            <div class="flex items-center gap-1 text-sm">
+                                                <template x-for="(chain, i) in conn.chains" :key="i">
+                                                    <span>
+                                                        <span :class="chain === 'direct' ? 'text-green-400' : 'text-blue-400'" x-text="chain"></span>
+                                                        <span x-show="i < conn.chains.length - 1" class="text-dark-muted mx-1">→</span>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-2 text-green-400 text-sm" x-text="formatBytes(conn.download)"></td>
+                                        <td class="px-4 py-2 text-blue-400 text-sm" x-text="formatBytes(conn.upload)"></td>
+                                        <td class="px-4 py-2 text-dark-muted text-sm" x-text="formatDuration(conn.start)"></td>
+                                        <td class="px-4 py-2">
+                                            <button @click="closeConnection(conn.id)"
+                                                    class="px-2 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-xs transition-colors">
+                                                断开
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="connections.length === 0">
+                                    <td colspan="8" class="px-4 py-8 text-center text-dark-muted">
+                                        暂无活跃连接
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Logs page -->
             <div x-show="currentPage === 'logs'" x-cloak class="p-6 h-full flex flex-col">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl font-bold">日志查看</h2>
                     <div class="flex items-center gap-3">
+                        <input type="text" x-model="logSearch" placeholder="搜索域名/关键词..."
+                               class="px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-sm w-48">
+                        <select x-model="logFilter"
+                                class="px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-sm">
+                            <option value="all">全部日志</option>
+                            <option value="dns">DNS 查询</option>
+                            <option value="outbound">出站连接</option>
+                            <option value="urltest">节点切换</option>
+                            <option value="important">仅重要</option>
+                        </select>
                         <select x-model="logLevel" @change="setLogLevel()"
                                 class="px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-sm">
                             <option value="trace">Trace</option>
@@ -646,14 +767,14 @@
                         </select>
                         <button @click="clearLogs()"
                                 class="px-4 py-2 bg-dark-border hover:bg-dark-muted/30 rounded-lg transition-colors text-sm">
-                            清空日志
+                            清空
                         </button>
                     </div>
                 </div>
 
                 <div class="flex-1 bg-dark-card rounded-lg border border-dark-border overflow-hidden">
                     <div id="log-container" class="h-full overflow-y-auto p-4 font-mono text-sm scrollbar-thin">
-                        <template x-for="(log, index) in logs" :key="index">
+                        <template x-for="(log, index) in filteredLogs" :key="index">
                             <div class="py-1">
                                 <span class="text-dark-muted" x-text="formatLogTime(log.time)"></span>
                                 <span :class="{
@@ -663,10 +784,10 @@
                                     'text-gray-500': log.level === 'trace',
                                     'text-dark-text': log.level === 'info'
                                 }" x-text="'[' + log.level.toUpperCase() + ']'"></span>
-                                <span x-text="log.message"></span>
+                                <span x-html="highlightLog(log.message)"></span>
                             </div>
                         </template>
-                        <p x-show="logs.length === 0" class="text-dark-muted text-center py-4">暂无日志</p>
+                        <p x-show="filteredLogs.length === 0" class="text-dark-muted text-center py-4">暂无匹配日志</p>
                     </div>
                 </div>
             </div>
@@ -710,12 +831,18 @@
                 appConfig: null,
                 logs: [],
                 logLevel: 'info',
+                logFilter: 'all',
+                logSearch: '',
                 toasts: [],
+                connections: [],
+                connStats: { download: 0, upload: 0 },
+                connInterval: null,
                 showAddSubscription: false,
                 showAddRule: false,
                 newSubscription: { name: '', url: '' },
                 newRule: { type: 'domain', value: '', outbound: 'proxy' },
                 eventSource: null,
+                clearingCache: false,
 
                 async init() {
                     await this.fetchStatus();
@@ -735,6 +862,12 @@
                             this.connectSSE();
                         } else if (oldPage === 'logs') {
                             this.disconnectSSE();
+                        }
+                        if (newPage === 'connections') {
+                            this.fetchConnections();
+                            this.startConnPolling();
+                        } else if (oldPage === 'connections') {
+                            this.stopConnPolling();
                         }
                     });
                 },
@@ -851,6 +984,52 @@
                     if (this.eventSource) {
                         this.eventSource.close();
                         this.eventSource = null;
+                    }
+                },
+
+                async fetchConnections() {
+                    try {
+                        const res = await fetch('http://127.0.0.1:9090/connections');
+                        const data = await res.json();
+                        this.connections = data.connections || [];
+                        this.connStats = {
+                            download: data.downloadTotal || 0,
+                            upload: data.uploadTotal || 0
+                        };
+                    } catch (e) {
+                        console.error('Failed to fetch connections:', e);
+                    }
+                },
+
+                startConnPolling() {
+                    this.stopConnPolling();
+                    this.connInterval = setInterval(() => this.fetchConnections(), 2000);
+                },
+
+                stopConnPolling() {
+                    if (this.connInterval) {
+                        clearInterval(this.connInterval);
+                        this.connInterval = null;
+                    }
+                },
+
+                async closeConnection(id) {
+                    try {
+                        await fetch(`http://127.0.0.1:9090/connections/${id}`, { method: 'DELETE' });
+                        await this.fetchConnections();
+                    } catch (e) {
+                        this.showToast('断开连接失败', 'error');
+                    }
+                },
+
+                async closeAllConnections() {
+                    if (!confirm('确定断开所有连接?')) return;
+                    try {
+                        await fetch('http://127.0.0.1:9090/connections', { method: 'DELETE' });
+                        await this.fetchConnections();
+                        this.showToast('已断开所有连接', 'success');
+                    } catch (e) {
+                        this.showToast('断开失败', 'error');
                     }
                 },
 
@@ -1082,6 +1261,26 @@
                     }
                 },
 
+                async clearCache() {
+                    if (this.clearingCache) return;
+                    this.clearingCache = true;
+                    try {
+                        const res = await fetch('/api/cache/clear', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('DNS 缓存已清空', 'success');
+                            // Refresh status since sing-box may have restarted
+                            await this.fetchStatus();
+                        } else {
+                            this.showToast(data.error || '清空缓存失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('清空缓存失败: ' + e.message, 'error');
+                    } finally {
+                        this.clearingCache = false;
+                    }
+                },
+
                 async fetchLogLevel() {
                     try {
                         const res = await fetch('/api/logs/level');
@@ -1134,6 +1333,75 @@
                     if (!timeStr) return '';
                     const date = new Date(timeStr);
                     return date.toLocaleTimeString('zh-CN');
+                },
+
+                get filteredLogs() {
+                    let filtered = this.logs;
+
+                    // Apply category filter
+                    switch (this.logFilter) {
+                        case 'dns':
+                            filtered = filtered.filter(log =>
+                                log.message.includes('dns:') ||
+                                log.message.includes('exchanged') ||
+                                log.message.includes('cached'));
+                            break;
+                        case 'outbound':
+                            filtered = filtered.filter(log =>
+                                log.message.includes('outbound/') ||
+                                log.message.includes('outbound connection'));
+                            break;
+                        case 'urltest':
+                            filtered = filtered.filter(log =>
+                                log.message.includes('urltest') ||
+                                log.message.includes('selected'));
+                            break;
+                        case 'important':
+                            filtered = filtered.filter(log =>
+                                log.level === 'warn' ||
+                                log.level === 'error' ||
+                                log.level === 'fatal' ||
+                                log.message.includes('selected') ||
+                                log.message.includes('started') ||
+                                log.message.includes('stopped'));
+                            break;
+                    }
+
+                    // Apply search filter
+                    if (this.logSearch.trim()) {
+                        const search = this.logSearch.toLowerCase();
+                        filtered = filtered.filter(log =>
+                            log.message.toLowerCase().includes(search));
+                    }
+
+                    return filtered;
+                },
+
+                highlightLog(message) {
+                    if (!this.logSearch.trim()) return message;
+                    const search = this.logSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(`(${search})`, 'gi');
+                    return message.replace(regex, '<span class="bg-yellow-500/30 text-yellow-300">$1</span>');
+                },
+
+                formatBytes(bytes) {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+
+                formatDuration(startTime) {
+                    if (!startTime) return '-';
+                    const start = new Date(startTime);
+                    const now = new Date();
+                    const seconds = Math.floor((now - start) / 1000);
+                    if (seconds < 60) return seconds + 's';
+                    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
+                    const hours = Math.floor(seconds / 3600);
+                    const mins = Math.floor((seconds % 3600) / 60);
+                    return hours + 'h ' + mins + 'm';
                 }
             };
         }

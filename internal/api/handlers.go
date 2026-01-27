@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -592,6 +593,50 @@ func (h *Handlers) handleSSELogs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// Cache handlers
+
+func (h *Handlers) ClearCache(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		h.sendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	cfg := h.cfgMgr.GetConfig()
+	cachePath := cfg.SingBox.ConfigPath
+	// Cache file is in the same directory as config, named cache.db
+	cacheDir := cachePath[:len(cachePath)-len("config.json")]
+	cacheFile := cacheDir + "cache.db"
+
+	// Stop sing-box first
+	wasRunning := h.processMgr.GetStatus().State == "running"
+	if wasRunning {
+		if err := h.processMgr.Stop(); err != nil {
+			h.sendError(w, http.StatusInternalServerError, "Failed to stop sing-box: "+err.Error())
+			return
+		}
+	}
+
+	// Delete cache file
+	if err := os.Remove(cacheFile); err != nil && !os.IsNotExist(err) {
+		h.sendError(w, http.StatusInternalServerError, "Failed to delete cache: "+err.Error())
+		return
+	}
+
+	// Restart if was running
+	if wasRunning {
+		if err := h.generateConfig(); err != nil {
+			h.sendError(w, http.StatusInternalServerError, "Failed to generate config: "+err.Error())
+			return
+		}
+		if err := h.processMgr.Start(); err != nil {
+			h.sendError(w, http.StatusInternalServerError, "Failed to restart sing-box: "+err.Error())
+			return
+		}
+	}
+
+	h.sendJSON(w, map[string]string{"status": "cache_cleared"})
 }
 
 // Helper functions

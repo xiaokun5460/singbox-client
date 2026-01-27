@@ -35,11 +35,16 @@ type LogConfig struct {
 
 // DNS Config for sing-box 1.12+
 type DNSConfig struct {
-	Servers      []DNSServer  `json:"servers,omitempty"`
-	Rules        []DNSRule    `json:"rules,omitempty"`
-	Final        string       `json:"final,omitempty"`
-	Independent  bool         `json:"independent_cache,omitempty"`
-	FakeIP       *FakeIPConfig `json:"fakeip,omitempty"`
+	Servers        []DNSServer   `json:"servers,omitempty"`
+	Rules          []DNSRule     `json:"rules,omitempty"`
+	Final          string        `json:"final,omitempty"`
+	Strategy       string        `json:"strategy,omitempty"`
+	Independent    bool          `json:"independent_cache,omitempty"`
+	CacheCapacity  int           `json:"cache_capacity,omitempty"`
+	DisableExpire  bool          `json:"disable_expire,omitempty"`
+	ReverseMapping bool          `json:"reverse_mapping,omitempty"`
+	ClientSubnet   string        `json:"client_subnet,omitempty"`
+	FakeIP         *FakeIPConfig `json:"fakeip,omitempty"`
 }
 
 // FakeIPConfig for sing-box DNS
@@ -93,6 +98,12 @@ type Outbound struct {
 	Outbounds                 []string `json:"outbounds,omitempty"`
 	Default                   string   `json:"default,omitempty"`
 	InterruptExistConnections bool     `json:"interrupt_exist_connections,omitempty"`
+
+	// URLTest specific fields
+	URL         string `json:"url,omitempty"`
+	Interval    string `json:"interval,omitempty"`
+	Tolerance   int    `json:"tolerance,omitempty"`
+	IdleTimeout string `json:"idle_timeout,omitempty"`
 
 	// Protocol specific fields
 	Server     string           `json:"server,omitempty"`
@@ -190,8 +201,10 @@ type Debug struct {
 }
 
 type CacheFile struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Path    string `json:"path,omitempty"`
+	Enabled     bool   `json:"enabled,omitempty"`
+	Path        string `json:"path,omitempty"`
+	StoreFakeIP bool   `json:"store_fakeip,omitempty"`
+	StoreRDRC   bool   `json:"store_rdrc,omitempty"`
 }
 
 func (g *ConfigGenerator) Generate(nodes []Outbound, cfg config.Config, state config.AppState) (*SingBoxConfig, error) {
@@ -220,8 +233,10 @@ func (g *ConfigGenerator) Generate(nodes []Outbound, cfg config.Config, state co
 			ExternalController: "127.0.0.1:9090",
 		},
 		CacheFile: &CacheFile{
-			Enabled: true,
-			Path:    filepath.Join(g.dataDir, "singbox", "cache.db"),
+			Enabled:     true,
+			Path:        filepath.Join(g.dataDir, "singbox", "cache.db"),
+			StoreFakeIP: true, // 持久化 FakeIP 映射
+			StoreRDRC:   true, // 持久化 DNS 规则检查结果
 		},
 	}
 
@@ -230,8 +245,12 @@ func (g *ConfigGenerator) Generate(nodes []Outbound, cfg config.Config, state co
 
 func (g *ConfigGenerator) generateDNS(cfg config.Config) *DNSConfig {
 	dns := &DNSConfig{
-		Final:       "proxy-dns",
-		Independent: true,
+		Final:          "proxy-dns",
+		Strategy:       "prefer_ipv4",  // 优先 IPv4，兼容性更好
+		Independent:    false,          // 共享缓存，避免同域名重复缓存
+		CacheCapacity:  50000,          // 缓存 50000 条记录
+		DisableExpire:  false,          // 允许缓存过期，保持 DNS 记录新鲜
+		ReverseMapping: true,           // 启用反向映射，日志显示域名而非 IP
 	}
 
 	// Get domestic DNS tag
@@ -252,25 +271,24 @@ func (g *ConfigGenerator) generateDNS(cfg config.Config) *DNSConfig {
 	}
 
 	// Add proxy DNS servers with DoH (DNS over HTTPS) for better privacy
-	// DoH encrypts DNS queries, preventing ISP snooping
-	// sing-box 1.12+ format: type=https, server=hostname (not full URL)
-	// Only use one DoH provider to avoid multiple location results in leak tests
+	// Cloudflare DoH is faster than Google (~10-30ms improvement)
+	// DoH encrypts DNS queries, preventing proxy server from seeing queries
 	dns.Servers = append(dns.Servers,
-		// Google DoH - primary proxy DNS (uses proxy node location)
+		// Cloudflare DoH - faster and more private
 		DNSServer{
 			Type:           "https",
 			Tag:            "proxy-doh",
-			Server:         "dns.google",
-			DomainResolver: domesticTag, // Resolve dns.google using domestic DNS
+			Server:         "1.1.1.1",
+			DomainResolver: domesticTag, // Resolve cloudflare IP using domestic DNS
 			Detour:         "proxy",
 		},
 	)
 
-	// UDP DNS as fallback only (not used for normal queries)
+	// UDP DNS as fallback (Cloudflare is also faster for UDP)
 	dns.Servers = append(dns.Servers, DNSServer{
 		Type:   "udp",
 		Tag:    "proxy-dns",
-		Server: "8.8.8.8",
+		Server: "1.1.1.1",
 		Detour: "proxy",
 	})
 
@@ -331,38 +349,35 @@ func (g *ConfigGenerator) generateDNS(cfg config.Config) *DNSConfig {
 			Server: domesticTag,
 		},
 
-		// 5. Common China domains - use domestic DNS (real IP, faster)
+		// 5. China sites from comprehensive domain lists - use domestic DNS
+		// Using dnsmasq-china-list which is more complete than geosite-cn
 		{
-			DomainSuffix: []string{
-				".cn",
-				".中国",
-				".公司",
-				".网络",
+			RuleSet: []string{
+				"geosite-cn",              // 基础中国域名
+				"china-domains",           // dnsmasq-china-list 加速域名
+				"apple-cn",                // Apple 中国服务
+				"google-cn",               // Google 中国服务
 			},
 			Server: domesticTag,
 		},
 
-		// 6. China sites from geosite - use domestic DNS
-		{
-			RuleSet: []string{"geosite-cn"},
-			Server:  domesticTag,
-		},
-
-		// 7. Ads and tracking domains - block
+		// 6. Ads and tracking domains - block
 		{
 			RuleSet: []string{"geosite-category-ads-all"},
 			Action:  "reject",
 		},
 
-		// 8. Foreign domains use FakeIP (prevents DNS leaks by not resolving real IP)
+		// 7. Known foreign domains use FakeIP (prevents DNS leaks)
 		{
 			RuleSet: []string{"geosite-geolocation-!cn"},
 			Server:  "fakeip-dns",
 		},
 	}
 
-	// Update final to use DoH
-	dns.Final = "proxy-doh"
+	// Final: unknown domains use proxy DNS to get real IP
+	// This allows BGP IP list to work for accurate China routing
+	// Trade-off: proxy server sees DNS queries for unknown domains
+	dns.Final = "proxy-dns"
 
 	return dns
 }
@@ -404,12 +419,17 @@ func (g *ConfigGenerator) generateOutbounds(nodes []Outbound, state config.AppSt
 	}
 	outbounds = append(outbounds, selector)
 
-	// Add URLTest (auto selection)
+	// Add URLTest (auto selection) with optimized settings
 	if len(nodeTags) > 0 {
 		outbounds = append(outbounds, Outbound{
-			Type:      "urltest",
-			Tag:       "auto",
-			Outbounds: nodeTags,
+			Type:                      "urltest",
+			Tag:                       "auto",
+			Outbounds:                 nodeTags,
+			URL:                       "https://www.gstatic.com/generate_204", // Google 连通性测试，快速可靠
+			Interval:                  "3m",                                   // 每 3 分钟测试一次
+			Tolerance:                 50,                                     // 延迟差异超过 50ms 才切换节点
+			IdleTimeout:               "30m",                                  // 空闲 30 分钟后暂停测试
+			InterruptExistConnections: true,                                   // 切换节点时中断现有连接
 		})
 	}
 
@@ -454,6 +474,11 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 		{
 			Action: "sniff",
 		},
+		// Resolve domains to IP for accurate geoip routing
+		// This is critical for Solution C - allows BGP IP list to work
+		{
+			Action: "resolve",
+		},
 		// DNS hijacking using action instead of outbound
 		{
 			Protocol: []string{"dns"},
@@ -478,8 +503,8 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 				"doh.cleanbrowsing.org",
 				"dns.digitale-gesellschaft.ch",
 			},
-			Port:     []int{443},
-			Action:   "reject", // Block browser DoH
+			Port:   []int{443},
+			Action: "reject", // Block browser DoH
 		},
 		// Block ads and tracking (route level)
 		{
@@ -492,14 +517,20 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 			Action:      "route",
 			Outbound:    "direct",
 		},
-		// China direct using rule_set
+		// China direct using comprehensive domain lists
 		{
-			RuleSet:  []string{"geosite-cn"},
+			RuleSet: []string{
+				"geosite-cn",
+				"china-domains",
+				"apple-cn",
+				"google-cn",
+			},
 			Action:   "route",
 			Outbound: "direct",
 		},
+		// China direct using BGP-based IP list (more accurate than MaxMind geoip)
 		{
-			RuleSet:  []string{"geoip-cn"},
+			RuleSet:  []string{"chnroutes-bgp"},
 			Action:   "route",
 			Outbound: "direct",
 		},
@@ -532,17 +563,48 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 
 	route.Rules = rules
 
-	// Use remote rule_set - use jsdelivr mirror (China accessible)
-	// Official rule-set branch updates frequently (geosite daily, geoip weekly)
+	// Use remote rule_set from multiple sources
+	// Dreista/sing-box-rule-set-cn provides more accurate BGP-based IP list and comprehensive domain lists
 	route.RuleSet = []RuleSet{
+		// BGP-based China IP list (more accurate than MaxMind geoip-cn)
+		// Source: misakaio/chnroutes2 - updated daily from BGP feed
 		{
-			Tag:            "geoip-cn",
+			Tag:            "chnroutes-bgp",
 			Type:           "remote",
 			Format:         "binary",
-			URL:            "https://testingcf.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-cn.srs",
+			URL:            "https://testingcf.jsdelivr.net/gh/Dreista/sing-box-rule-set-cn@rule-set/chnroutes.txt.srs",
 			DownloadDetour: "direct",
 			UpdateInterval: "1d",
 		},
+		// Comprehensive China domain list from dnsmasq-china-list
+		// Much more complete than geosite-cn
+		{
+			Tag:            "china-domains",
+			Type:           "remote",
+			Format:         "binary",
+			URL:            "https://testingcf.jsdelivr.net/gh/Dreista/sing-box-rule-set-cn@rule-set/accelerated-domains.china.conf.srs",
+			DownloadDetour: "direct",
+			UpdateInterval: "1d",
+		},
+		// Apple China services
+		{
+			Tag:            "apple-cn",
+			Type:           "remote",
+			Format:         "binary",
+			URL:            "https://testingcf.jsdelivr.net/gh/Dreista/sing-box-rule-set-cn@rule-set/apple.china.conf.srs",
+			DownloadDetour: "direct",
+			UpdateInterval: "1d",
+		},
+		// Google China services (translate, etc.)
+		{
+			Tag:            "google-cn",
+			Type:           "remote",
+			Format:         "binary",
+			URL:            "https://testingcf.jsdelivr.net/gh/Dreista/sing-box-rule-set-cn@rule-set/google.china.conf.srs",
+			DownloadDetour: "direct",
+			UpdateInterval: "1d",
+		},
+		// Base geosite-cn (fallback)
 		{
 			Tag:            "geosite-cn",
 			Type:           "remote",
@@ -551,6 +613,7 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 			DownloadDetour: "direct",
 			UpdateInterval: "1d",
 		},
+		// Domain rules - Foreign (for FakeIP)
 		{
 			Tag:            "geosite-geolocation-!cn",
 			Type:           "remote",
@@ -559,7 +622,7 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 			DownloadDetour: "direct",
 			UpdateInterval: "1d",
 		},
-		// Ads blocking rule set
+		// Ads blocking
 		{
 			Tag:            "geosite-category-ads-all",
 			Type:           "remote",

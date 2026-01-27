@@ -11,11 +11,12 @@
 - **一键部署** - 单脚本完成安装、配置、启动
 - **Web 管理界面** - 简洁美观，支持移动端
 - **Clash 订阅** - 自动解析 Clash YAML 格式订阅
-- **智能分流** - 国内直连、国外代理，基于 GeoIP/GeoSite 规则
-- **DNS 防泄漏** - DoH 加密查询 + FakeIP，防止 DNS 泄漏
+- **智能分流** - 国内直连、国外代理，基于 BGP IP 列表和 GeoSite 规则
+- **DNS 防泄漏** - DoH 加密查询 + FakeIP + 代理 DNS 解析
 - **多协议支持** - Shadowsocks、VMess、VLESS、Trojan、Hysteria2
 - **自定义规则** - 支持域名、IP、GeoSite、GeoIP 规则
-- **实时日志** - WebSocket 实时查看 sing-box 日志
+- **实时日志** - SSE 实时查看日志，支持分类过滤
+- **连接管理** - 实时查看活跃连接，支持单独断开
 
 ## 系统要求
 
@@ -85,14 +86,15 @@ sudo ./scripts/install.sh uninstall    # 卸载
 | 节点管理 | 查看节点列表、切换节点、延迟测试 |
 | 订阅管理 | 添加/删除订阅、手动刷新 |
 | 规则设置 | 自定义分流规则 |
-| 系统设置 | DNS、TUN、日志等配置 |
-| 日志查看 | 实时查看 sing-box 日志 |
+| 系统设置 | DNS、TUN、缓存管理等配置 |
+| 日志查看 | 实时日志，支持分类过滤 |
+| 连接管理 | 查看活跃连接、流量统计 |
 
 ### 代理模式
 
 | 模式 | 说明 |
 |------|------|
-| 规则模式 | 根据 GeoIP/GeoSite 规则智能分流 (推荐) |
+| 规则模式 | 根据 BGP IP/GeoSite 规则智能分流 (推荐) |
 | 全局模式 | 所有流量走代理 |
 | 直连模式 | 所有流量直连 |
 
@@ -107,7 +109,7 @@ sudo ./scripts/install.sh uninstall    # 卸载
 ├── subscriptions/                # 订阅缓存
 └── singbox/
     ├── config.json               # sing-box 配置 (自动生成)
-    └── cache.db                  # 规则缓存
+    └── cache.db                  # DNS/规则缓存 (持久化)
 ```
 
 ### 配置文件
@@ -164,22 +166,45 @@ subscription:
 默认规则 (自动生成):
 
 1. **DNS 劫持** - 接管系统 DNS 请求
-2. **私有网络直连** - 10.x, 192.168.x, 172.16.x
-3. **中国域名直连** - geosite:cn
-4. **中国 IP 直连** - geoip:cn
-5. **广告拦截** - geosite:category-ads-all
-6. **其他流量代理** - 默认走代理
+2. **域名解析** - resolve action 获取真实 IP
+3. **私有网络直连** - 10.x, 192.168.x, 172.16.x
+4. **中国域名直连** - geosite:cn + dnsmasq-china-list
+5. **中国 IP 直连** - BGP 路由表 (比 MaxMind GeoIP 更准确)
+6. **广告拦截** - geosite:category-ads-all
+7. **其他流量代理** - 默认走代理
 
-### DNS 防泄漏
+### DNS 防泄漏策略
 
 ```
-国内域名 (.cn, geosite:cn)     → 国内 DNS (223.5.5.5)  → 真实 IP
-国外域名 (geosite:geolocation-!cn) → FakeIP (198.18.x.x) → 代理解析
+┌─────────────────────────────────────────────────────────────┐
+│                       DNS 查询流程                           │
+├─────────────────────────────────────────────────────────────┤
+│  已知中国域名 (geosite-cn + china-domains)                   │
+│      → 国内 DNS (223.5.5.5) → 真实 IP → 直连                │
+├─────────────────────────────────────────────────────────────┤
+│  已知国外域名 (geosite-geolocation-!cn)                      │
+│      → FakeIP (198.18.x.x) → 代理                           │
+├─────────────────────────────────────────────────────────────┤
+│  未知域名                                                    │
+│      → 代理 DNS (Cloudflare DoH) → 真实 IP                  │
+│      → BGP IP 列表匹配 → 中国 IP 直连，其他代理              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
+**特点：**
 - 国内域名使用国内 DNS，获取真实 IP，直连访问
-- 国外域名使用 FakeIP，通过代理解析，防止 DNS 泄漏
-- DoH (DNS over HTTPS) 加密 DNS 查询
+- 国外域名使用 FakeIP，防止 DNS 泄漏
+- 未知域名通过代理 DNS 解析，然后用 BGP IP 列表判断
+- ISP 无法看到任何国外域名的 DNS 查询
+
+### 规则集来源
+
+| 规则集 | 来源 | 用途 |
+|--------|------|------|
+| chnroutes-bgp | [misakaio/chnroutes2](https://github.com/misakaio/chnroutes2) | BGP 中国 IP (更准确) |
+| china-domains | [felixonmars/dnsmasq-china-list](https://github.com/felixonmars/dnsmasq-china-list) | 中国域名加速列表 |
+| geosite-cn | [SagerNet/sing-geosite](https://github.com/SagerNet/sing-geosite) | 中国域名规则 |
+| geosite-geolocation-!cn | SagerNet/sing-geosite | 国外域名规则 |
 
 ## API 接口
 
@@ -197,6 +222,7 @@ subscription:
 | `/api/config` | GET/PUT | 配置管理 |
 | `/api/logs` | GET | 获取日志 |
 | `/api/logs/stream` | GET (SSE) | 实时日志流 |
+| `/api/cache/clear` | POST | 清空 DNS 缓存 |
 
 ## 常见问题
 
@@ -230,6 +256,10 @@ nslookup baidu.com
 - **域名后缀**: `.example.com` → 匹配所有子域名
 - **GeoSite**: `google` → 使用预定义规则集
 - **GeoIP**: `us` → 匹配美国 IP
+
+### Q: 如何清空 DNS 缓存？
+
+在 Web 界面 → 系统设置 → 缓存管理 → 清空 DNS 缓存
 
 ### Q: 如何更新 sing-box？
 
@@ -277,6 +307,8 @@ go build -o singbox-client .
 - [sing-box](https://github.com/SagerNet/sing-box) - 优秀的代理核心
 - [Tailwind CSS](https://tailwindcss.com/) - CSS 框架
 - [Alpine.js](https://alpinejs.dev/) - 轻量级 JS 框架
+- [dnsmasq-china-list](https://github.com/felixonmars/dnsmasq-china-list) - 中国域名列表
+- [chnroutes2](https://github.com/misakaio/chnroutes2) - BGP 中国 IP 列表
 
 ## 许可证
 
