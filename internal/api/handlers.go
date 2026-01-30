@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"singbox-client/internal/bypass"
 	"singbox-client/internal/config"
 	"singbox-client/internal/rules"
 	"singbox-client/internal/singbox"
@@ -22,6 +23,7 @@ type Handlers struct {
 	updater    *subscription.Updater
 	generator  *singbox.ConfigGenerator
 	rulesMgr   *rules.RuleManager
+	bypassMgr  *bypass.Manager
 }
 
 func NewHandlers() *Handlers {
@@ -32,6 +34,7 @@ func NewHandlers() *Handlers {
 		updater:    subscription.GetUpdater(),
 		generator:  singbox.NewConfigGenerator(cfgMgr.GetDataDir()),
 		rulesMgr:   rules.NewRuleManager(),
+		bypassMgr:  bypass.GetManager(),
 	}
 }
 
@@ -652,4 +655,99 @@ func (h *Handlers) generateConfig() error {
 	}
 
 	return h.generator.SaveConfig(sbConfig, cfg.SingBox.ConfigPath)
+}
+
+// Bypass handlers
+
+// HandleBypass 处理绕过列表的 GET/POST/DELETE 请求
+func (h *Handlers) HandleBypass(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		h.getBypassList(w, r)
+	case "POST":
+		h.addBypassEntry(w, r)
+	case "DELETE":
+		h.removeBypassEntry(w, r)
+	default:
+		h.sendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+func (h *Handlers) getBypassList(w http.ResponseWriter, r *http.Request) {
+	list := h.bypassMgr.GetBypassList()
+	gateway, iface := h.bypassMgr.GetGatewayInfo()
+
+	h.sendJSON(w, map[string]interface{}{
+		"bypass_list": list,
+		"gateway":     gateway,
+		"interface":   iface,
+	})
+}
+
+func (h *Handlers) addBypassEntry(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Address string `json:"address"`
+		Comment string `json:"comment"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Address == "" {
+		h.sendError(w, http.StatusBadRequest, "Address is required")
+		return
+	}
+
+	if err := h.bypassMgr.AddBypassEntry(req.Address, req.Comment); err != nil {
+		h.sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.sendJSON(w, map[string]string{
+		"status":  "added",
+		"address": req.Address,
+	})
+}
+
+func (h *Handlers) removeBypassEntry(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Address string `json:"address"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.sendError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Address == "" {
+		h.sendError(w, http.StatusBadRequest, "Address is required")
+		return
+	}
+
+	if err := h.bypassMgr.RemoveBypassEntry(req.Address); err != nil {
+		h.sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.sendJSON(w, map[string]string{
+		"status":  "removed",
+		"address": req.Address,
+	})
+}
+
+// RefreshBypass 刷新绕过路由（域名 IP 可能变化）
+func (h *Handlers) RefreshBypass(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		h.sendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	if err := h.bypassMgr.RefreshRoutes(); err != nil {
+		h.sendError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.sendJSON(w, map[string]string{"status": "refreshed"})
 }

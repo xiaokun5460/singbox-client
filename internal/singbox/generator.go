@@ -180,6 +180,7 @@ type RouteRule struct {
 	Domain        []string `json:"domain,omitempty"`
 	DomainSuffix  []string `json:"domain_suffix,omitempty"`
 	DomainKeyword []string `json:"domain_keyword,omitempty"`
+	IPCIDR        []string `json:"ip_cidr,omitempty"`
 	IPIsPrivate   bool     `json:"ip_is_private,omitempty"`
 	Action        string   `json:"action,omitempty"`
 	Outbound      string   `json:"outbound,omitempty"`
@@ -433,7 +434,7 @@ func (g *ConfigGenerator) generateOutbounds(nodes []Outbound, state config.AppSt
 		})
 	}
 
-	// Add direct outbound only (no block/dns in 1.12+)
+	// Add direct outbound
 	outbounds = append(outbounds, Outbound{
 		Type: "direct",
 		Tag:  "direct",
@@ -553,6 +554,8 @@ func (g *ConfigGenerator) generateRoute(state config.AppState, cfg config.Config
 			r.Domain = []string{rule.Value}
 		case "domain_suffix":
 			r.DomainSuffix = []string{rule.Value}
+		case "ip_cidr":
+			r.IPCIDR = []string{rule.Value}
 		case "geosite":
 			r.RuleSet = []string{"geosite-" + rule.Value}
 		case "geoip":

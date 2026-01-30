@@ -68,6 +68,13 @@ type AppState struct {
 	SelectedNode  string         `yaml:"selected_node" json:"selected_node"`
 	ProxyMode     string         `yaml:"proxy_mode" json:"proxy_mode"` // global, rule, direct
 	CustomRules   []CustomRule   `yaml:"custom_rules" json:"custom_rules"`
+	BypassList    []BypassEntry  `yaml:"bypass_list" json:"bypass_list"` // 完全绕过 TUN 的地址
+}
+
+// BypassEntry 表示一个需要完全绕过 TUN 的地址
+type BypassEntry struct {
+	Address string `yaml:"address" json:"address"` // 域名或 IP
+	Comment string `yaml:"comment" json:"comment"` // 备注
 }
 
 type CustomRule struct {
@@ -200,6 +207,7 @@ func (m *Manager) defaultState() *AppState {
 		SelectedNode:  "",
 		ProxyMode:     "rule",
 		CustomRules:   []CustomRule{},
+		BypassList:    []BypassEntry{},
 	}
 }
 
@@ -306,4 +314,17 @@ func (m *Manager) SetCustomRules(rules []CustomRule) error {
 
 func (m *Manager) GetDataDir() string {
 	return m.dataDir
+}
+
+func (m *Manager) GetBypassList() []BypassEntry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.state.BypassList
+}
+
+func (m *Manager) SetBypassList(list []BypassEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.state.BypassList = list
+	return m.saveState()
 }

@@ -55,6 +55,10 @@ func (r *Router) setupRoutes() {
 
 	r.mux.HandleFunc("/api/cache/clear", r.corsMiddleware(r.handlers.ClearCache))
 
+	// Bypass routes (完全绕过 TUN)
+	r.mux.HandleFunc("/api/bypass", r.corsMiddleware(r.handlers.HandleBypass))
+	r.mux.HandleFunc("/api/bypass/refresh", r.corsMiddleware(r.handlers.RefreshBypass))
+
 	// Static files and SPA
 	r.mux.HandleFunc("/", r.serveStatic)
 }

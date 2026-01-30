@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"singbox-client/internal/api"
+	"singbox-client/internal/bypass"
 	"singbox-client/internal/config"
 	"singbox-client/internal/singbox"
 	"singbox-client/internal/subscription"
@@ -68,6 +69,19 @@ func main() {
 	processMgr := singbox.GetProcessManager()
 	processMgr.Initialize(cfg.SingBox.BinaryPath, cfg.SingBox.ConfigPath)
 
+	// Initialize bypass manager
+	bypassMgr := bypass.GetManager()
+	if err := bypassMgr.Initialize(cfgMgr); err != nil {
+		log.Printf("Warning: failed to initialize bypass manager: %v", err)
+	} else {
+		// Apply bypass routes
+		if err := bypassMgr.ApplyBypassRoutes(); err != nil {
+			log.Printf("Warning: failed to apply bypass routes: %v", err)
+		}
+		// Start auto-refresh every hour
+		bypassMgr.StartAutoRefresh(1 * time.Hour)
+	}
+
 	// Create router
 	router := api.NewRouter(webFS)
 
@@ -96,6 +110,14 @@ func main() {
 			if err := processMgr.Stop(); err != nil {
 				log.Printf("Warning: failed to stop sing-box: %v", err)
 			}
+		}
+
+		// Stop bypass auto-refresh
+		bypassMgr.StopAutoRefresh()
+
+		// Remove bypass routes
+		if err := bypassMgr.RemoveBypassRoutes(); err != nil {
+			log.Printf("Warning: failed to remove bypass routes: %v", err)
 		}
 
 		// Graceful shutdown with timeout

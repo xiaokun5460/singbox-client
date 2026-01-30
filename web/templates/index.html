@@ -96,6 +96,15 @@
                     规则设置
                 </button>
 
+                <button @click="currentPage = 'bypass'"
+                    :class="currentPage === 'bypass' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
+                    class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                    绕过管理
+                </button>
+
                 <button @click="currentPage = 'settings'"
                     :class="currentPage === 'settings' ? 'bg-blue-600 text-white' : 'text-dark-muted hover:bg-dark-border'"
                     class="w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors">
@@ -541,6 +550,109 @@
                 </div>
             </div>
 
+            <!-- Bypass page -->
+            <div x-show="currentPage === 'bypass'" x-cloak class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold">绕过管理</h2>
+                        <p class="text-sm text-dark-muted mt-1">完全绕过 TUN 的地址（用于 FTP 等特殊协议）</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="refreshBypass()"
+                                :disabled="bypassLoading"
+                                class="px-4 py-2 bg-dark-border hover:bg-dark-muted/30 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2">
+                            <svg class="w-4 h-4" :class="bypassLoading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            刷新路由
+                        </button>
+                        <button @click="showAddBypass = true"
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                            添加绕过
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gateway info -->
+                <div class="bg-dark-card rounded-lg p-4 border border-dark-border mb-6">
+                    <div class="flex items-center gap-6">
+                        <div>
+                            <span class="text-dark-muted text-sm">默认网关:</span>
+                            <span class="ml-2 font-mono" x-text="bypassInfo.gateway || '-'"></span>
+                        </div>
+                        <div>
+                            <span class="text-dark-muted text-sm">物理接口:</span>
+                            <span class="ml-2 font-mono" x-text="bypassInfo.interface || '-'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bypass list -->
+                <div class="bg-dark-card rounded-lg border border-dark-border">
+                    <div class="p-4 border-b border-dark-border">
+                        <h3 class="font-semibold">绕过列表</h3>
+                    </div>
+                    <div class="divide-y divide-dark-border">
+                        <template x-for="(entry, index) in bypassInfo.bypass_list || []" :key="index">
+                            <div class="flex items-center justify-between p-4 hover:bg-dark-border/30 transition-colors">
+                                <div class="flex-1">
+                                    <div class="font-mono" x-text="entry.address"></div>
+                                    <div class="text-sm text-dark-muted" x-text="entry.comment || '无备注'"></div>
+                                </div>
+                                <button @click="removeBypass(entry.address)"
+                                        class="p-2 hover:bg-red-600/20 text-red-400 rounded transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                        <div x-show="!bypassInfo.bypass_list || bypassInfo.bypass_list.length === 0"
+                             class="p-8 text-center text-dark-muted">
+                            <p>暂无绕过地址</p>
+                            <p class="text-sm mt-2">添加需要完全绕过代理的域名或 IP（如 FTP 服务器）</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add bypass modal -->
+                <div x-show="showAddBypass" x-cloak
+                     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+                     @click.self="showAddBypass = false">
+                    <div class="bg-dark-card rounded-lg p-6 w-full max-w-md border border-dark-border">
+                        <h3 class="text-lg font-semibold mb-4">添加绕过地址</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">地址（域名或 IP）</label>
+                                <input type="text" x-model="newBypass.address"
+                                       placeholder="example.com 或 1.2.3.4"
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-dark-muted mb-1">备注（可选）</label>
+                                <input type="text" x-model="newBypass.comment"
+                                       placeholder="FTP 服务器"
+                                       class="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg focus:outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button @click="showAddBypass = false"
+                                    class="px-4 py-2 bg-dark-border hover:bg-dark-muted/30 rounded-lg transition-colors">
+                                取消
+                            </button>
+                            <button @click="addBypass()"
+                                    :disabled="!newBypass.address"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors">
+                                添加
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Settings page -->
             <div x-show="currentPage === 'settings'" x-cloak class="p-6">
                 <h2 class="text-2xl font-bold mb-6">系统设置</h2>
@@ -839,8 +951,12 @@
                 connInterval: null,
                 showAddSubscription: false,
                 showAddRule: false,
+                showAddBypass: false,
                 newSubscription: { name: '', url: '' },
                 newRule: { type: 'domain', value: '', outbound: 'proxy' },
+                newBypass: { address: '', comment: '' },
+                bypassInfo: { bypass_list: [], gateway: '', interface: '' },
+                bypassLoading: false,
                 eventSource: null,
                 clearingCache: false,
 
@@ -851,6 +967,7 @@
                     await this.fetchRules();
                     await this.fetchConfig();
                     await this.fetchLogLevel();
+                    await this.fetchBypass();
 
                     // Start polling
                     setInterval(() => this.fetchStatus(), 5000);
@@ -1231,6 +1348,77 @@
                     } catch (e) {
                         this.showToast('删除失败: ' + e.message, 'error');
                     }
+                },
+
+                // Bypass methods
+                async fetchBypass() {
+                    try {
+                        const res = await fetch('/api/bypass');
+                        const data = await res.json();
+                        if (data.success) {
+                            this.bypassInfo = data.data;
+                        }
+                    } catch (e) {
+                        console.error('Failed to fetch bypass:', e);
+                    }
+                },
+
+                async addBypass() {
+                    try {
+                        const res = await fetch('/api/bypass', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.newBypass)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('绕过地址已添加', 'success');
+                            this.showAddBypass = false;
+                            this.newBypass = { address: '', comment: '' };
+                            await this.fetchBypass();
+                        } else {
+                            this.showToast(data.error || '添加失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('添加失败: ' + e.message, 'error');
+                    }
+                },
+
+                async removeBypass(address) {
+                    if (!confirm('确定删除此绕过地址?')) return;
+                    try {
+                        const res = await fetch('/api/bypass', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ address })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('绕过地址已删除', 'success');
+                            await this.fetchBypass();
+                        } else {
+                            this.showToast(data.error || '删除失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('删除失败: ' + e.message, 'error');
+                    }
+                },
+
+                async refreshBypass() {
+                    this.bypassLoading = true;
+                    try {
+                        const res = await fetch('/api/bypass/refresh', { method: 'POST' });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('路由已刷新', 'success');
+                            await this.fetchBypass();
+                        } else {
+                            this.showToast(data.error || '刷新失败', 'error');
+                        }
+                    } catch (e) {
+                        this.showToast('刷新失败: ' + e.message, 'error');
+                    }
+                    this.bypassLoading = false;
                 },
 
                 async saveConfig() {
