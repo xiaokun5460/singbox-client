@@ -1,9 +1,11 @@
 package bypass
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os/exec"
 	"strings"
 	"sync"
@@ -146,7 +148,57 @@ func (m *Manager) resolveAddress(address string) ([]string, error) {
 		return []string{ip}, nil
 	}
 
-	// 域名解析
+	// 使用 DoH 解析域名，避免 sing-box fake-ip 干扰
+	result, err := m.resolveViaDoH(address)
+	if err != nil {
+		// 回退到系统 DNS
+		log.Printf("DoH resolve failed for %s, falling back to system DNS: %v", address, err)
+		return m.resolveViaSystem(address)
+	}
+
+	return result, nil
+}
+
+// resolveViaDoH 通过 DNS over HTTPS 解析域名
+func (m *Manager) resolveViaDoH(domain string) ([]string, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	url := fmt.Sprintf("https://dns.google/resolve?name=%s&type=A", domain)
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var dohResp struct {
+		Answer []struct {
+			Data string `json:"data"`
+			Type int    `json:"type"`
+		} `json:"Answer"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&dohResp); err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, ans := range dohResp.Answer {
+		if ans.Type == 1 { // A record
+			if ip := net.ParseIP(ans.Data); ip != nil && ip.To4() != nil {
+				result = append(result, ans.Data)
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no IPv4 address found for %s", domain)
+	}
+
+	return result, nil
+}
+
+// resolveViaSystem 通过系统 DNS 解析
+func (m *Manager) resolveViaSystem(address string) ([]string, error) {
 	ips, err := net.LookupIP(address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve %s: %w", address, err)

@@ -15,6 +15,7 @@
 - **DNS 防泄漏** - DoH 加密查询 + FakeIP + 代理 DNS 解析
 - **多协议支持** - Shadowsocks、VMess、VLESS、Trojan、Hysteria2
 - **自定义规则** - 支持域名、IP、GeoSite、GeoIP 规则
+- **Bypass 绕过** - 支持特定地址绕过 TUN 直连（如 FTP 服务器）
 - **实时日志** - SSE 实时查看日志，支持分类过滤
 - **连接管理** - 实时查看活跃连接，支持单独断开
 
@@ -86,6 +87,7 @@ sudo ./scripts/install.sh uninstall    # 卸载
 | 节点管理 | 查看节点列表、切换节点、延迟测试 |
 | 订阅管理 | 添加/删除订阅、手动刷新 |
 | 规则设置 | 自定义分流规则 |
+| 绕过管理 | 添加绕过地址（如 FTP 服务器），绕过 TUN 直连 |
 | 系统设置 | DNS、TUN、缓存管理等配置 |
 | 日志查看 | 实时日志，支持分类过滤 |
 | 连接管理 | 查看活跃连接、流量统计 |
@@ -223,6 +225,30 @@ subscription:
 | `/api/logs` | GET | 获取日志 |
 | `/api/logs/stream` | GET (SSE) | 实时日志流 |
 | `/api/cache/clear` | POST | 清空 DNS 缓存 |
+| `/api/bypass` | GET/POST/DELETE | 绕过管理 |
+| `/api/bypass/refresh` | POST | 刷新绕过路由 |
+
+## Bypass 绕过功能
+
+某些协议（如 FTP）无法通过 sing-box 正常工作，需要绕过 TUN 直连。
+
+### 使用场景
+
+- FTP 服务器（多通道协议，sing-box 不支持 FTP ALG）
+- 其他需要直接访问的特殊服务
+
+### 工作原理
+
+1. 添加绕过地址（域名或 IP）
+2. 系统通过 DoH 解析域名获取真实 IP（避免 fake-ip 干扰）
+3. 添加路由规则：`ip route add <ip>/32 via <gateway> dev <interface>`
+4. 流量直接走物理网卡，不经过 TUN
+
+### 注意事项
+
+- 绕过仅适用于 sing-box 无法处理的协议
+- 普通 HTTP/HTTPS 直连请使用规则设置中的直连规则
+- 域名 IP 可能变化，系统每小时自动刷新路由
 
 ## 常见问题
 
@@ -280,7 +306,8 @@ singbox-client/
 │   ├── config/             # 配置管理
 │   ├── singbox/            # sing-box 配置生成与进程管理
 │   ├── subscription/       # 订阅解析
-│   └── rules/              # 规则管理
+│   ├── rules/              # 规则管理
+│   └── bypass/             # 绕过管理
 ├── web/
 │   ├── templates/          # HTML 模板
 │   └── static/             # 静态资源
