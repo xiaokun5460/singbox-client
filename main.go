@@ -82,6 +82,28 @@ func main() {
 		bypassMgr.StartAutoRefresh(1 * time.Hour)
 	}
 
+	// Auto-start sing-box if enabled
+	state := cfgMgr.GetState()
+	if state.AutoStart {
+		log.Println("Auto-starting sing-box...")
+		generator := singbox.NewConfigGenerator(cfgMgr.GetDataDir())
+		nodes := updater.GetNodes()
+		if len(nodes) > 0 {
+			sbConfig, err := generator.Generate(nodes, cfg, state)
+			if err != nil {
+				log.Printf("Warning: failed to generate config for auto-start: %v", err)
+			} else if err := generator.SaveConfig(sbConfig, cfg.SingBox.ConfigPath); err != nil {
+				log.Printf("Warning: failed to save config for auto-start: %v", err)
+			} else if err := processMgr.Start(); err != nil {
+				log.Printf("Warning: failed to auto-start sing-box: %v", err)
+			} else {
+				log.Println("sing-box auto-started successfully")
+			}
+		} else {
+			log.Println("No nodes available, skipping auto-start")
+		}
+	}
+
 	// Create router
 	router := api.NewRouter(webFS)
 

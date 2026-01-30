@@ -103,6 +103,9 @@ func (h *Handlers) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Save auto-start state
+	h.cfgMgr.SetAutoStart(true)
+
 	h.sendJSON(w, map[string]string{"status": "started"})
 }
 
@@ -116,6 +119,9 @@ func (h *Handlers) Stop(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// Save auto-start state
+	h.cfgMgr.SetAutoStart(false)
 
 	h.sendJSON(w, map[string]string{"status": "stopped"})
 }

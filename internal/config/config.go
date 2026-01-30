@@ -69,6 +69,7 @@ type AppState struct {
 	ProxyMode     string         `yaml:"proxy_mode" json:"proxy_mode"` // global, rule, direct
 	CustomRules   []CustomRule   `yaml:"custom_rules" json:"custom_rules"`
 	BypassList    []BypassEntry  `yaml:"bypass_list" json:"bypass_list"` // 完全绕过 TUN 的地址
+	AutoStart     bool           `yaml:"auto_start" json:"auto_start"`   // 启动时自动启动 sing-box
 }
 
 // BypassEntry 表示一个需要完全绕过 TUN 的地址
@@ -326,5 +327,12 @@ func (m *Manager) SetBypassList(list []BypassEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.state.BypassList = list
+	return m.saveState()
+}
+
+func (m *Manager) SetAutoStart(enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.state.AutoStart = enabled
 	return m.saveState()
 }
