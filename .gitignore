@@ -38,3 +38,6 @@ state.yaml
 # Build output
 dist/
 build/
+
+# Tailwind standalone CLI
+tailwindcss

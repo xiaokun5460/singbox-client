@@ -4,51 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SingBox Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            bg: '#0f172a',
-                            card: '#1e293b',
-                            border: '#334155',
-                            text: '#e2e8f0',
-                            muted: '#94a3b8',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        [x-cloak] { display: none !important; }
-        .spinner {
-            border: 2px solid #334155;
-            border-top: 2px solid #3b82f6;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .scrollbar-thin::-webkit-scrollbar {
-            width: 6px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-track {
-            background: #1e293b;
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 3px;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/tailwind.min.css">
+    <script defer src="/static/js/alpine.min.js"></script>
 </head>
 <body class="bg-dark-bg text-dark-text min-h-screen" x-data="app()" x-init="init()">
     <div class="flex h-screen">
