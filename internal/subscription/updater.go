@@ -25,7 +25,7 @@ const (
 	HTTPTimeout    = 30 * time.Second
 	CacheDirPerm   = 0755
 	CacheFilePerm  = 0600
-	ClashUserAgent = "ClashForAndroid/2.5.12"
+	ClashUserAgent = "clash-verge/v2.2.0"
 )
 
 type Updater struct {
