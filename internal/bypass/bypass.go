@@ -47,14 +47,9 @@ func (m *Manager) Initialize(cfgMgr *config.Manager) error {
 
 	m.cfgMgr = cfgMgr
 
-	// 检测默认网关和接口
-	gateway, iface, err := m.detectDefaultRoute()
-	if err != nil {
+	if err := m.refreshDefaultRouteLocked(); err != nil {
 		return fmt.Errorf("failed to detect default route: %w", err)
 	}
-
-	m.gateway = gateway
-	m.iface = iface
 
 	return nil
 }
@@ -85,13 +80,42 @@ func (m *Manager) detectDefaultRoute() (gateway, iface string, err error) {
 	return gateway, iface, nil
 }
 
+func (m *Manager) refreshDefaultRouteLocked() error {
+	gateway, iface, err := m.detectDefaultRoute()
+	if err != nil {
+		return err
+	}
+
+	if err := m.validateInterfaceUsable(iface); err != nil {
+		return err
+	}
+
+	m.gateway = gateway
+	m.iface = iface
+	return nil
+}
+
+func (m *Manager) validateInterfaceUsable(iface string) error {
+	out, err := exec.Command("ip", "link", "show", "dev", iface).Output()
+	if err != nil {
+		return fmt.Errorf("failed to check interface %s: %w", iface, err)
+	}
+
+	status := string(out)
+	if strings.Contains(status, "NO-CARRIER") || strings.Contains(status, "state DOWN") {
+		return fmt.Errorf("default interface %s is down", iface)
+	}
+
+	return nil
+}
+
 // ApplyBypassRoutes 应用所有绕过路由
 func (m *Manager) ApplyBypassRoutes() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.gateway == "" || m.iface == "" {
-		return fmt.Errorf("bypass manager not initialized")
+	if err := m.refreshDefaultRouteLocked(); err != nil {
+		return fmt.Errorf("failed to refresh default route: %w", err)
 	}
 
 	bypassList := m.cfgMgr.GetBypassList()
@@ -121,10 +145,14 @@ func (m *Manager) addRouteForAddress(address string) error {
 
 		// 添加路由: ip route add <ip>/32 via <gateway> dev <iface>
 		cmd := exec.Command("ip", "route", "add", ip+"/32", "via", m.gateway, "dev", m.iface)
-		if err := cmd.Run(); err != nil {
+		if out, err := cmd.CombinedOutput(); err != nil {
+			msg := strings.TrimSpace(string(out))
 			// 如果路由已存在，忽略错误
-			if !strings.Contains(err.Error(), "File exists") {
-				return fmt.Errorf("failed to add route for %s: %w", ip, err)
+			if !strings.Contains(msg, "File exists") {
+				if msg == "" {
+					return fmt.Errorf("failed to add route for %s: %w", ip, err)
+				}
+				return fmt.Errorf("failed to add route for %s: %w: %s", ip, err, msg)
 			}
 		}
 
